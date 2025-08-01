@@ -7,9 +7,16 @@
 */
 
 #pragma once
-
-#include <JuceHeader.h>
+#include <juce_gui_basics/juce_gui_basics.h>
+#include <juce_audio_processors/juce_audio_processors.h>
 #include "FFTDataGenerator.h"
+
+enum SpectrogramMode {
+    kSpectrogramMode_Classic = 0,
+    kSpectrogramMode_Reassign,
+    kSpectrogramMode_NC_Method,
+    kSpectrogramMode_Num,
+};
 
 //==============================================================================
 /**
@@ -40,7 +47,7 @@ public:
     bool producesMidi() const override;
     bool isMidiEffect() const override;
     double getTailLengthSeconds() const override;
-    void SpectrogramVSTAudioProcessor::pushIntoFFTBuffer(juce::AudioBuffer<float>& buffer);
+    void pushIntoFFTBuffer(juce::AudioBuffer<float>& buffer);
 
     int getNumPrograms() override;
     int getCurrentProgram() override;
@@ -57,6 +64,7 @@ public:
     std::vector<float> frequencies;
     std::vector<float> magnitudes;
     std::vector<float> standardFFTResult;
+    std::vector<float> ncResult;
 
     float noiseFloorDb = -48.f;
     float despecklingCutoff = 1.f;
@@ -69,7 +77,7 @@ private:
     juce::dsp::Oscillator<float> osc;
     juce::dsp::Gain<float> gain;
     std::vector<int> fftChoiceOrders;
-    void SpectrogramVSTAudioProcessor::updateParameters();
+    void updateParameters();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SpectrogramVSTAudioProcessor)
 };

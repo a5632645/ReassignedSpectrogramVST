@@ -1,17 +1,24 @@
 #pragma once
 #include "FFTDataGenerator.h"
+#include "juce_dsp/juce_dsp.h"
 
 FFTDataGenerator::FFTDataGenerator(int _fftSize, int _sampleRate):
     fftSize(_fftSize),
-    fft(std::log2(_fftSize)),
+    sampleRate(_sampleRate),
     standardWindow(_fftSize, 0.0f),
     derivativeWindow(_fftSize, 0.0f),
     timeWeightedWindow(_fftSize, 0.0f),
     derivativeTimeWeightedWindow(_fftSize, 0.0f),
-    sampleRate(_sampleRate),
+    fft(std::log2(_fftSize)),
     despecklingCutoff(2.f)
 {
+    // ncfft.init(fftSize * 2);
+    ncfft.init(_fftSize);
     updateParameters(_fftSize, 2.f);
+}
+
+static int IdxWrap(int x, int length) {
+    return (x % length + length) % length;
 }
 
 void FFTDataGenerator::reassignedSpectrogram(
@@ -19,10 +26,12 @@ void FFTDataGenerator::reassignedSpectrogram(
     std::vector<float>& times,
     std::vector<float>& frequencies,
     std::vector<float>& magnitudes,
-    std::vector<float>& standardFFTResult
+    std::vector<float>& standardFFTResult,
+    std::vector<float>& ncResult
 ) {
     int bufferSize = buffer.getNumSamples();
     auto spectrumHann = doFFT(buffer, standardWindow);
+    auto spectrumRect = doFFTNoWindow(buffer);
 
     auto spectrumHannDerivative = doFFT(buffer, derivativeWindow);
     auto spectumHannTimeWeighted = doFFT(buffer, timeWeightedWindow);
@@ -50,6 +59,20 @@ void FFTDataGenerator::reassignedSpectrogram(
     resizeIfNecessary(frequencies, fftSize / 2);
     resizeIfNecessary(magnitudes, fftSize / 2);
     resizeIfNecessary(standardFFTResult, fftSize / 2);
+    resizeIfNecessary(ncResult, fftSize / 2);
+
+    for (int bin = 0; bin < fftSize / 2; ++bin) {
+        auto& thisBin = spectrumRect[bin];
+        auto& nextBin = spectrumRect[bin + 1];
+        float ncSum = -(thisBin.real() * nextBin.real() + thisBin.imag() * nextBin.imag());
+        if (ncSum < 0) {
+            ncResult[bin] = -100.0f;
+        }
+        else {
+            float gain = std::sqrt(ncSum + 1e-18f);
+            ncResult[bin] = 20.0f * std::log10(gain);
+        }
+    }
 
     for (int frequencyBin = 0; frequencyBin < fftSize / 2; frequencyBin++) {
         currentFrequency = frequencyBin * fftBinSize;
@@ -93,6 +116,8 @@ void FFTDataGenerator::updateParameters(float _fftSize, float _despecklingCutoff
     despecklingCutoff = _despecklingCutoff;
     fftSize = _fftSize;
     fft = juce::dsp::FFT(std::log2(_fftSize));
+    // ncfft.init(fftSize * 2);
+    ncfft.init(fftSize);
 
     resizeIfNecessary(standardWindow, fftSize);
     juce::dsp::WindowingFunction<float>::fillWindowingTables(standardWindow.data(), _fftSize, juce::dsp::WindowingFunction<float>::blackmanHarris, false);
@@ -172,6 +197,32 @@ std::vector<std::complex<float>> FFTDataGenerator::doFFT(const juce::AudioBuffer
     // because we are splitting the energy between positive and negative frequencies.
     for (int i = 0; i < fftSize; i++) {
         fftResult[i] /= (fftSize / 2);
+    }
+
+    return fftResult;
+}
+
+std::vector<std::complex<float>> FFTDataGenerator::doFFTNoWindow(const juce::AudioBuffer<float>& inputBuffer) {
+    std::vector<float> frame(fftSize, 0.0f);
+    std::vector<float> real(fftSize / 2 + 1, 0.0f);
+    std::vector<float> imag(fftSize / 2 + 1, 0.0f);
+    std::vector<std::complex<float>> fftResult(fftSize + 1, 0.0f);
+    
+    const float* inputChannelData = inputBuffer.getReadPointer(0);
+    for (int i = 0; i < fftSize; i++) {
+        frame[i] = inputChannelData[i];
+    }
+
+    // Perform FFT
+    // ncFft.perform(frame.data(), fftResult.data(), false);
+    ncfft.fft(frame.data(), real.data(), imag.data());
+
+    // Normalize the values by the FFT size, and multiply by 2 
+    // because we are splitting the energy between positive and negative frequencies.
+    float mul = 1.0f / (fftSize / 2.0f);
+    for (int i = 0; i < fftSize / 2 + 1; i++) {
+        fftResult[i].real(real[i] * mul);
+        fftResult[i].imag(imag[i] * mul);
     }
 
     return fftResult;

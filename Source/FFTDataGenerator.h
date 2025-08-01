@@ -1,5 +1,7 @@
 #pragma once
-#include <JuceHeader.h>
+#include <juce_audio_basics/juce_audio_basics.h>
+#include <juce_dsp/juce_dsp.h>
+#include "AudioFFT/AudioFFT.h"
 
 class FFTDataGenerator
 {
@@ -13,7 +15,8 @@ public:
         std::vector<float>& times,
         std::vector<float>& frequencies,
         std::vector<float>& magnitudes,
-        std::vector<float>& standardFFTResult
+        std::vector<float>& standardFFTResult,
+        std::vector<float>& ncResult
     );
 
     void updateTimeWeightedWindow();
@@ -27,9 +30,11 @@ public:
         std::vector<float>& window
     );
 
-    void FFTDataGenerator::resizeIfNecessary(std::vector<float>& vector, int size);
+    std::vector<std::complex<float>> doFFTNoWindow(const juce::AudioBuffer<float>&inputBuffer);
 
-    void FFTDataGenerator::updateParameters(float despeckleCutoff, float fftSize);
+    void resizeIfNecessary(std::vector<float>& vector, int size);
+
+    void updateParameters(float despeckleCutoff, float fftSize);
 
 private:
     int sampleRate;
@@ -38,5 +43,6 @@ private:
     std::vector<float> timeWeightedWindow;
     std::vector<float> derivativeTimeWeightedWindow;
     juce::dsp::FFT fft;
+    audiofft::AudioFFT ncfft;
     float despecklingCutoff;
 };

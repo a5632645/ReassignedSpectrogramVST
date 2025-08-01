@@ -7,8 +7,7 @@
 */
 
 #pragma once
-
-#include <JuceHeader.h>
+#include "PluginProcessor.h"
 //==============================================================================
 /**
 */
@@ -50,7 +49,9 @@ private:
 
     void updateSpectrogramReassigned();
 
-    void timerCallback();
+    void updateSpectrogramNCMethod();
+
+    void timerCallback() override;
 
     void drawSpectrogram(juce::Graphics& g, juce::Rectangle<int> area);
 
