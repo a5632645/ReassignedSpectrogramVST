@@ -2,6 +2,9 @@ Demo Video (click to view on YouTube)
 
 [![Demo video](images/example_reassignment.gif)](https://www.youtube.com/watch?v=_9qX5OIP9nE)
 
+NC Method
+![NC Method](images/nc_method.gif)]
+
 
 # Context / Background
 - I was inspired by this [video](https://www.youtube.com/watch?v=8J4LE9UpxYU) from Au5 (Austin) which talks about Spectrograms and the problems with FFT resolution in the low end. Austin goes on to talk about the [Spectral Reassignment method](https://arxiv.org/pdf/0903.3080) which outlines the math and equations for reassigning the energy of the frequency bands closer to the center of mass.
