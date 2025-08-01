@@ -8,6 +8,7 @@
 
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "juce_core/juce_core.h"
 
 //==============================================================================
 SpectrogramVSTAudioProcessor::SpectrogramVSTAudioProcessor()
@@ -155,7 +156,7 @@ void SpectrogramVSTAudioProcessor::processBlock (juce::AudioBuffer<float>& buffe
 
     pushIntoFFTBuffer(buffer);
     updateParameters(); // TODO: This is pretty expensive and we don't have to do this every time!
-    fftDataGenerator.reassignedSpectrogram(fftBuffer, times, frequencies, magnitudes, standardFFTResult);
+    fftDataGenerator.reassignedSpectrogram(fftBuffer, times, frequencies, magnitudes, standardFFTResult, ncResult);
 }
 
 void SpectrogramVSTAudioProcessor::pushIntoFFTBuffer(juce::AudioBuffer<float>& buffer) {
@@ -266,15 +267,15 @@ SpectrogramVSTAudioProcessor::createParameterLayout() {
         )
     );
 
-    juce::StringArray useReassignmentChoices;
-    useReassignmentChoices.add("No");
-    useReassignmentChoices.add("Yes");
-
     layout.add(
         std::make_unique<juce::AudioParameterChoice>(
             "Reassignment Enabled",
             "Reassignment Enabled",
-            useReassignmentChoices,
+            juce::StringArray{
+                "Classic",
+                "Reassignment",
+                "NC method"
+            },
             1
         )
     );

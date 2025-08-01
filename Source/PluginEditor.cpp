@@ -7,6 +7,10 @@
 */
 
 #include "PluginProcessor.h"
+#include "juce_audio_processors/juce_audio_processors.h"
+#include "juce_core/system/juce_PlatformDefs.h"
+#include "juce_graphics/juce_graphics.h"
+#include <cstddef>
 #include "PluginEditor.h"
 
 //==============================================================================
@@ -36,8 +40,9 @@ SpectrogramVSTAudioProcessorEditor::SpectrogramVSTAudioProcessorEditor (Spectrog
     fftSizeComboBox.addItem("4096", 3);
     fftSizeComboBox.addItem("8192", 4);
 
-    useReassignmentComboBox.addItem("No", 1);
-    useReassignmentComboBox.addItem("Yes", 2);
+    useReassignmentComboBox.addItem("Classic", 1);
+    useReassignmentComboBox.addItem("Reassignment", 2);
+    useReassignmentComboBox.addItem("NC Method", 3);
 
     noiseFloorSliderLabel.setText("Noise Floor (dB)", juce::dontSendNotification);
     despecklingCutoffLabel.setText("Despeckling Cutoff", juce::dontSendNotification);
@@ -107,6 +112,66 @@ void SpectrogramVSTAudioProcessorEditor::updateSpectrogram() {
     }
 }
 
+void SpectrogramVSTAudioProcessorEditor::updateSpectrogramNCMethod() {
+    // Display the spectral frame using only the FFT result.
+    int spectrogramHeight = spectrogramImage.getHeight();
+    int spectrogramWidth = spectrogramImage.getWidth();
+    int binPixelStart = 0;
+    int binPixelEnd = spectrogramHeight;
+
+    float minFrequency = 20.f;
+    float maxFrequency = 24000.f;
+    float minMagnitudeDb = audioProcessor.noiseFloorDb;
+    float maxMagnitudeDb = -14.9f;
+    float binSize = sampleRate / audioProcessor.fftSize;
+    float currentBinFrequency = 0;
+    float currentBinMagnitude = 0;
+    float normalizedMagnitude = 0;
+
+    for (int i = 0; i < spectrogramImage.getHeight(); ++i) {
+        spectrogramImage.setPixelAt(spectrogramImagePos, i, juce::Colours::black);
+    }
+
+    auto res = audioProcessor.ncResult;
+    std::vector<float> largestMagnitudeForY(spectrogramHeight, -100.f);
+    for (size_t i = 0; i < res.size(); i++) {
+        currentBinMagnitude = res[i];
+        currentBinMagnitude = juce::jlimit(minMagnitudeDb, maxMagnitudeDb, currentBinMagnitude);
+        currentBinFrequency = (i + 0.5f) * binSize;
+        float beginBin = i * binSize;
+        if (i == 0) beginBin = binSize * 0.1f;
+        float endBin = (i + 1) * binSize;
+        int ybegin = mapFrequencyToPixel(beginBin, minFrequency, maxFrequency, 0, spectrogramHeight);
+        int yend = mapFrequencyToPixel(endBin, minFrequency, maxFrequency, 0, spectrogramHeight);
+        normalizedMagnitude = juce::jmap<float>(currentBinMagnitude, minMagnitudeDb, maxMagnitudeDb, 0.0f, 1.0f);
+        if (ybegin == yend) {
+            int y = ybegin;
+            if (y > 0 && y < spectrogramHeight) {
+                if (currentBinMagnitude > largestMagnitudeForY[y]) {
+                    largestMagnitudeForY[y] = currentBinMagnitude;
+                    spectrogramImage.setPixelAt(spectrogramImagePos, spectrogramHeight - y, infernoGradient.getColourAtPosition(normalizedMagnitude));
+                }
+            }
+        }
+        else {
+            for (int y = ybegin; y < yend; y += 1) {
+                if (y > 0 && y < spectrogramHeight) {
+                    if (currentBinMagnitude > largestMagnitudeForY[y]) {
+                        largestMagnitudeForY[y] = currentBinMagnitude;
+                        spectrogramImage.setPixelAt(spectrogramImagePos, spectrogramHeight - y, infernoGradient.getColourAtPosition(normalizedMagnitude));
+                    }
+                }
+            }
+        }
+    }
+
+    spectrogramImagePos += 1;
+
+    if (spectrogramImagePos >= spectrogramWidth) {
+        spectrogramImagePos = 0;
+    }
+}
+
 void SpectrogramVSTAudioProcessorEditor::updateSpectrogramReassigned() {
     // Define the height and width of the spectrogram image
     int spectrogramHeight = spectrogramImage.getHeight();
@@ -157,13 +222,21 @@ void SpectrogramVSTAudioProcessorEditor::updateSpectrogramReassigned() {
 
 void SpectrogramVSTAudioProcessorEditor::timerCallback()
 {
-    if (audioProcessor.apvts.getRawParameterValue("Reassignment Enabled")->load()) {
-        updateSpectrogramReassigned();
-    }
-    else {
+    auto mode = static_cast<juce::AudioParameterChoice*>(audioProcessor.apvts.getParameter("Reassignment Enabled"));
+    switch (mode->getIndex()) {
+    case kSpectrogramMode_Classic:
         updateSpectrogram();
+        break;
+    case kSpectrogramMode_Reassign:
+        updateSpectrogramReassigned();
+        break;
+    case kSpectrogramMode_NC_Method:
+        updateSpectrogramNCMethod();
+        break;
+    default:
+        jassertfalse;
     }
-
+    
     repaint();
 }
 
